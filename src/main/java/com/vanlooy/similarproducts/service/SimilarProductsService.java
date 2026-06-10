@@ -2,6 +2,7 @@ package com.vanlooy.similarproducts.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -10,7 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClientException;
 
 import com.vanlooy.similarproducts.client.ProductApiClient;
 import com.vanlooy.similarproducts.dto.ProductDetail;
@@ -41,8 +41,8 @@ public class SimilarProductsService {
 
     private List<ProductDetail> fetchDetailsInParallel(List<String> similarIds) {
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<ProductDetail>> futures = similarIds.stream()
-                    .map(id -> executor.submit(() -> productApiClient.getProductDetail(id)))
+            List<Future<Optional<ProductDetail>>> futures = similarIds.stream()
+                    .map(id -> executor.submit(() -> productApiClient.findProductDetail(id)))
                     .toList();
 
             // recorremos en el mismo orden de los ids para respetar la similitud
@@ -50,9 +50,9 @@ public class SimilarProductsService {
             for (int i = 0; i < futures.size(); i++) {
                 String id = similarIds.get(i);
                 try {
-                    similarProducts.add(futures.get(i).get());
+                    futures.get(i).get().ifPresent(similarProducts::add);
                 } catch (ExecutionException ex) {
-                    handleDetailFailure(id, ex.getCause());
+                    log.warn("Skipping similar product {}: {}", id, ex.getCause().toString());
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
                     throw new IllegalStateException(ErrorMessage.FETCH_INTERRUPTED.format(), ex);
@@ -60,16 +60,5 @@ public class SimilarProductsService {
             }
             return similarProducts;
         }
-    }
-
-    private void handleDetailFailure(String id, Throwable cause) {
-        if (cause instanceof HttpClientErrorException.NotFound) {
-            log.warn("Similar product {} has no detail, skipping", id);
-            return;
-        }
-        if (cause instanceof RestClientException rce) {
-            throw rce;
-        }
-        throw new IllegalStateException(ErrorMessage.DETAIL_FETCH_FAILED.format(id), cause);
     }
 }

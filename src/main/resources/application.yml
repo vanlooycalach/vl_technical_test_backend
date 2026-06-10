@@ -5,6 +5,11 @@ spring:
   threads:
     virtual:
       enabled: true
+  cache:
+    type: caffeine
+    cache-names: similar-ids,product-details
+    caffeine:
+      spec: expireAfterWrite=30s,maximumSize=10000
 
 existing-apis:
   base-url: http://localhost:3001
