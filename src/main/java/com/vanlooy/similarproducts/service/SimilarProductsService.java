@@ -1,0 +1,45 @@
+package com.vanlooy.similarproducts.service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+
+import com.vanlooy.similarproducts.client.ProductApiClient;
+import com.vanlooy.similarproducts.dto.ProductDetail;
+import com.vanlooy.similarproducts.exception.ProductNotFoundException;
+
+@Service
+public class SimilarProductsService {
+
+    private static final Logger log = LoggerFactory.getLogger(SimilarProductsService.class);
+
+    private final ProductApiClient productApiClient;
+
+    public SimilarProductsService(ProductApiClient productApiClient) {
+        this.productApiClient = productApiClient;
+    }
+
+    public List<ProductDetail> getSimilarProducts(String productId) {
+        List<String> similarIds;
+        try {
+            similarIds = productApiClient.getSimilarIds(productId);
+        } catch (HttpClientErrorException.NotFound ex) {
+            throw new ProductNotFoundException(productId);
+        }
+
+        List<ProductDetail> similarProducts = new ArrayList<>();
+        for (String id : similarIds) {
+            try {
+                similarProducts.add(productApiClient.getProductDetail(id));
+            } catch (HttpClientErrorException.NotFound ex) {
+                // un id similar sin detalle no se puede devolver, lo saltamos
+                log.warn("Similar product {} has no detail, skipping", id);
+            }
+        }
+        return similarProducts;
+    }
+}
