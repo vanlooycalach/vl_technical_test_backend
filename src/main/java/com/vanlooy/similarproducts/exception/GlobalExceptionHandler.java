@@ -22,13 +22,13 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleUpstreamError(RestClientException ex) {
         log.error("Upstream API call failed: {}", ex.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
-                "Error calling the products API");
+                ErrorMessage.UPSTREAM_ERROR.format());
     }
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception ex) {
-        log.error("Unexpected error", ex);
+        log.error(ErrorMessage.UNEXPECTED_ERROR.format(), ex);
         return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
-                "Unexpected error");
+                ErrorMessage.UNEXPECTED_ERROR.format());
     }
 }

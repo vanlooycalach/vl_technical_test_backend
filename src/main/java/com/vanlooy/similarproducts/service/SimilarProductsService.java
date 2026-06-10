@@ -2,14 +2,19 @@ package com.vanlooy.similarproducts.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
 
 import com.vanlooy.similarproducts.client.ProductApiClient;
 import com.vanlooy.similarproducts.dto.ProductDetail;
+import com.vanlooy.similarproducts.exception.ErrorMessage;
 import com.vanlooy.similarproducts.exception.ProductNotFoundException;
 
 @Service
@@ -31,15 +36,40 @@ public class SimilarProductsService {
             throw new ProductNotFoundException(productId);
         }
 
-        List<ProductDetail> similarProducts = new ArrayList<>();
-        for (String id : similarIds) {
-            try {
-                similarProducts.add(productApiClient.getProductDetail(id));
-            } catch (HttpClientErrorException.NotFound ex) {
-                // un id similar sin detalle no se puede devolver, lo saltamos
-                log.warn("Similar product {} has no detail, skipping", id);
+        return fetchDetailsInParallel(similarIds);
+    }
+
+    private List<ProductDetail> fetchDetailsInParallel(List<String> similarIds) {
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<ProductDetail>> futures = similarIds.stream()
+                    .map(id -> executor.submit(() -> productApiClient.getProductDetail(id)))
+                    .toList();
+
+            // recorremos en el mismo orden de los ids para respetar la similitud
+            List<ProductDetail> similarProducts = new ArrayList<>(similarIds.size());
+            for (int i = 0; i < futures.size(); i++) {
+                String id = similarIds.get(i);
+                try {
+                    similarProducts.add(futures.get(i).get());
+                } catch (ExecutionException ex) {
+                    handleDetailFailure(id, ex.getCause());
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(ErrorMessage.FETCH_INTERRUPTED.format(), ex);
+                }
             }
+            return similarProducts;
         }
-        return similarProducts;
+    }
+
+    private void handleDetailFailure(String id, Throwable cause) {
+        if (cause instanceof HttpClientErrorException.NotFound) {
+            log.warn("Similar product {} has no detail, skipping", id);
+            return;
+        }
+        if (cause instanceof RestClientException rce) {
+            throw rce;
+        }
+        throw new IllegalStateException(ErrorMessage.DETAIL_FETCH_FAILED.format(id), cause);
     }
 }

@@ -1,5 +1,15 @@
 server:
   port: 5000
 
+spring:
+  threads:
+    virtual:
+      enabled: true
+
 existing-apis:
   base-url: http://localhost:3001
+  connect-timeout-ms: 500
+  # los mocks tienen productos con retardos de hasta 50s; cortamos antes
+  # de arrastrar esa latencia a nuestra respuesta
+  response-timeout-ms: 2000
+  max-connections: 200

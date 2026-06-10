@@ -2,7 +2,6 @@ package com.vanlooy.similarproducts.client;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -18,9 +17,8 @@ public class ProductApiClient {
 
     private final RestClient restClient;
 
-    public ProductApiClient(RestClient.Builder builder,
-            @Value("${existing-apis.base-url}") String baseUrl) {
-        this.restClient = builder.baseUrl(baseUrl).build();
+    public ProductApiClient(RestClient productApiRestClient) {
+        this.restClient = productApiRestClient;
     }
 
     public List<String> getSimilarIds(String productId) {
